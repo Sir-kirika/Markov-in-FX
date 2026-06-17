@@ -1,0 +1,2 @@
+symbol,total_trades,win_rate,total_pnl,profit_factor,avg_win,avg_loss,max_drawdown,sharpe,final_balance,expectancy
+EURCAD,150,0.533,6198.47,1.79,175.59,-112.13,-0.118,4.392,16198.47,41.32
