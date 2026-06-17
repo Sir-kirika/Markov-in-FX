@@ -179,11 +179,3 @@ Terminal 2:  python markov4.py   ← execution (imports Layer 2 + 3 internally)
 - `step_bars` increased from 80 to 400 and `n_iter` reduced from 200 to 50 — combined ~16× speedup with no loss of walk-forward integrity
 
 ---
-
-## Appendix: Grid/Martingale Scalping EA (separate, exploratory)
-
-A separate, unrelated strategy was evaluated alongside this project: a grid-martingale EA on XAUUSD that scales lot size on adverse retracements and nets the furthest + most recent order at a fixed $1 profit target once 4+ orders are open.
-
-Initial MT5 Strategy Tester output showed a 100% win rate across 27,359 trades, which on inspection is an MT5 reporting artifact — closing basket pairs together logs both legs as "won" even though the individual losing leg is real; it's absorbed into the net basket P&L rather than reported standalone. The equity curve's downside spikes confirm real drawdowns are occurring even though the balance line looks smooth.
-
-The strategy does already use EMA/stochastic trend filters, but the open risk is the unbounded grid depth during a sustained directional move with no retracement — a scenario not well represented in the ~3-year backtest window used. This is **not integrated with the Markov regime detector** and has **not been deployed live**. If pursued further, gating the grid off during HMM-confirmed strong-trend `high_vol` periods would be the natural next step, since that infrastructure already exists in this project.
