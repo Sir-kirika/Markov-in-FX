@@ -2,10 +2,6 @@
 
 A 5-layer algorithmic trading system that uses Hidden Markov Models (HMM) to detect market volatility regimes (`low_vol` / `high_vol`) and gates per-symbol strategies accordingly. Built in Python, connected to MetaTrader 5 via the EGM Securities broker.
 
-**Status:** Running on demo. Core architecture validated on 8 years of M15 data across 7 FX pairs. Gold (XAUUSD) added to the signal layer but not yet wired into the data/execution layers.
-
----
-
 ## Overview
 
 The system classifies each currency pair into one of two hidden volatility regimes using a Gaussian HMM, then routes to a regime-appropriate mean-reversion or trend strategy. Each symbol has its own strategy configuration and indicator parameters, discovered through walk-forward backtesting on up to 8 years of 15-minute bar data.
@@ -147,14 +143,6 @@ Following the v4 exhaustive results, Layer 3 and Layer 5 were updated to activat
 | `markov53.py` | 5 | Validation backtest — 8 symbols, dual-regime config |
 | `markov5opt.py` | 5 | Optimisation runner — exhaustive, resume support |
 
-**Terminal path:** `C:\Program Files\EGM Securities MetaTrader 5 Terminal\terminal64.exe`
-**Working directory:** `C:\Users\sir James\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Scripts\Markov\`
-
-**Run order (two terminals):**
-```
-Terminal 1:  python markov1.py   ← data feed
-Terminal 2:  python markov4.py   ← execution (imports Layer 2 + 3 internally)
-```
 
 ---
 
@@ -177,5 +165,65 @@ Terminal 2:  python markov4.py   ← execution (imports Layer 2 + 3 internally)
 - Resume system with MD5 fingerprint hashing implemented for multi-hour optimisation runs
 - Vectorised SL/TP simulation (~50× speed improvement over the bar-by-bar loop)
 - `step_bars` increased from 80 to 400 and `n_iter` reduced from 200 to 50 — combined ~16× speedup with no loss of walk-forward integrity
+
+---
+
+**Status:** Shelved (October 2026). A final shuffle test found no tradeable edge. See [Conclusion](#conclusion-october-2026) below. The performance figures in the later sections come from the original backtests and are superseded by that conclusion.
+
+---
+
+## Conclusion (October 2026)
+
+**The HMM regime layer carries some information, but it does not produce a tradeable edge.**
+
+
+### The final test: shuffle test
+
+`shuffle_test.py` re-ran four of the winning configs with causal HMM labels (forward filter), one trade at a time, per-bar spread, next-bar-open entry and results in R multiples. Only the regime gate changed between arms:
+
+- **ALWAYS:** no gate
+- **CLOCK:** a plain time-of-day rule
+- **REAL:** the causal HMM label
+- **SHUFFLE x200:** the REAL labels permuted among bars of the same hour of day
+
+| Case | ALWAYS | CLOCK | REAL | REAL vs shuffles |
+|---|---|---|---|---|
+| EURUSD Bollinger 20/3.0, high_vol | +53.7R | +18.2R | +52.7R | beats 100% |
+| GBPUSD EMA flipped 10/50, low_vol | -0.1R | -37.0R | -48.0R | beats 4% |
+| GBPCAD Bollinger 50/2.0, low_vol | -109.4R | -65.5R | -2.5R | beats 100% |
+| EURCAD RSI 21/30/70, high_vol | -49.8R | -30.6R | -34.3R | beats 40% |
+
+### What this means
+
+- **The HMM label is not just a clock.** It beat the same-hour shuffles in 2 of 4 cases (about 0.2 expected by chance). On GBPCAD the gate turned -109R into about break-even, which neither the clock rule nor any shuffle matched. The HMM does detect something real about conditions.
+- **It filters bad trades but does not create profit.** GBPCAD ended at roughly 0R (t = -0.09). EURUSD kept the same total R with fewer trades. GBPUSD got worse, EURCAD showed nothing.
+- **The old numbers were mostly noise.** The GBPCAD config that showed Sharpe 5.64 in the optimiser is about 0R once costs, one-trade-at-a-time and causal labels are applied.
+- **Only one setup is mildly positive.** EURUSD Bollinger 20/3.0 shows +0.127R per trade ungated (t = 2.1) after spread. It was picked from a large pool on the same 2 years, so it is not evidence of an edge.
+- **Caveats on the test itself.** Four cases, two years of data, and the regime side for each case was chosen in-sample, so the shuffle p-values are somewhat flattered.
+
+### HMM vs a simple time-of-day filter
+
+- **Crosstab check:** hour of day alone predicts the HMM label 71% of the time vs a 64% always-guess-the-bigger-regime baseline. The label is not just the clock, but it follows the daily volatility cycle closely (`high_vol` share rises from about 9% of bars at 07:00 to about 72% at 18:00, broker server time).
+- **Head-to-head (REAL vs a plain "hours 15-21" CLOCK rule):** REAL was better in 2 of 4 cases (EURUSD, GBPCAD) and worse in 2 of 4 (GBPUSD, EURCAD).
+- **Neither filter produced a profit.** The comparison is only about which one loses less, so a simple time filter is the baseline any regime model has to beat, and this one beat it inconsistently.
+- **Caveat:** the CLOCK rule was one crude block of hours, not tuned, so a better time filter might close some of the gap.
+- **Practical takeaway:** for what the HMM delivered, the added complexity (5 features, refits, model bundles) is hard to justify over a time filter or an ATR-percentile filter.
+
+### Lessons
+
+- An HMM on volatility features detects the volatility state (which clusters and is persistent). It does not predict price direction, and that is what the strategies on top needed.
+- Walk-forward around only the model refit is not validation. Strategy and parameter selection must be nested inside the walk-forward.
+- Check for lookahead in any "regime" label before trusting the results: use a causal forward filter, not `predict()` on a window.
+- Always include costs, enforce one position at a time, and report results in R before converting to money.
+- Deflate for the number of configurations tried, or the best result is just the luckiest one.
+
+### What is reusable
+
+The MT5 data pipeline, the walk-forward structure, the causal forward-filter HMM labelling, and `shuffle_test.py` (a clean harness for asking whether any regime/filter adds information beyond a null). If revisited, the better use of regimes is risk management (position sizing, stop width, trade/no-trade filtering) benchmarked against simple ATR-percentile or time-of-day filters, not direction prediction.
+
+### Not done
+
+- The live demo (started April 7) has not been compared against backtest expectations. Doing that on the EURUSD Bollinger trades would be the one remaining out-of-sample check before closing the idea for good.
+- XAUUSD was never wired into Layers 1, 2 and 4, and the pending items below are abandoned.
 
 ---

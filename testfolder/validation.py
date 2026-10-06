@@ -1,22 +1,19 @@
 """
 =============================================================
-LAYER 5 — VALIDATION BACKTEST (v3 — exhaustive optimisation config)
+LAYER 5 — VALIDATION BACKTEST
+Runs the exact winning configuration from optimisation results.
+Edit STRATEGY_CONFIG and PARAMS below to test any setup.
 =============================================================
 Requirements:
-    pip install MetaTrader5 pandas numpy hmmlearn scikit-learn matplotlib
+    pip install MetaTrader5 pandas numpy hmmlearn scikit-learn joblib matplotlib
 
-Mirrors Layer 3 SYMBOL_CONFIG exactly.
-Edit SYMBOL_CONFIG below to test different configurations.
+Standalone — does NOT require Layers 1-4 to be running.
+Only needs MT5 terminal open for historical data.
 
-Current config based on 8-year exhaustive optimisation:
-    EURUSD : rsi_21_20_80   low_vol | bollinger_20_3.0  high_vol
-    GBPUSD : bollinger_20_3.0 low_vol | rsi_21_20_80    high_vol
-    EURGBP : rsi_14_20_80   low_vol  | bollinger_20_2.5 high_vol
-    EURCAD : rsi_21_20_80   low_vol  | disabled
-    GBPCAD : bollinger_20_3.0 low_vol | rsi_14_20_80    high_vol
-    AUDUSD : bollinger_20_2.5 low_vol | ema_flipped_20_100 high_vol
-    USDCAD : bollinger_20_3.0 low_vol | ema_flipped_20_100 high_vol
-    XAUUSD : disabled                 | ema_flipped_10_200 high_vol
+Current config based on optimisation winners:
+    EURUSD high_vol : Bollinger BB_20_3.0  (Sharpe 2.10, DD -11.3%)
+    GBPUSD low_vol  : EMA_flip_10_50       (Sharpe 1.63, DD -14.9%)
+    USDJPY          : disabled             (no edge found)
 =============================================================
 """
 
@@ -33,74 +30,41 @@ warnings.filterwarnings("ignore")
 
 
 # ─────────────────────────────────────────────
-# PER-SYMBOL STRATEGY CONFIG
-# Must mirror Layer 3 SYMBOL_CONFIG exactly.
+# STRATEGY CONFIG
+# Edit this section to test different setups.
+# Options per regime: "bollinger" | "ema" | "ema_flipped" | "rsi" | "disabled"
 # ─────────────────────────────────────────────
 
-SYMBOL_CONFIG = {
+STRATEGY_CONFIG = {
     "EURUSD": {
-        "low_vol":  "disabled",#"vwap",
-        "high_vol": "disabled",#
-        "params": {
-            "rsi_period": 21, "rsi_oversold": 20, "rsi_overbought": 80,
-            "bb_period":  20, "bb_std": 3.0,"vwap_threshold": 0.002,
-        },
+        "low_vol":  "disabled",
+        "high_vol": "bollinger",    # BB_20_3.0 — Sharpe 2.10, DD -11.3%
     },
     "GBPUSD": {
-        "low_vol":  "disabled",#"bollinger",
-        "high_vol": "disabled",#"rsi",
-        "params": {
-            "bb_period":  20, "bb_std": 3.0,
-            "rsi_period": 21, "rsi_oversold": 20, "rsi_overbought": 80,
-        },
-    },
-    "EURGBP": {
-        "low_vol":  "disabled",#"rsi",
-        "high_vol": "disabled",#"bollinger",
-        "params": {
-            "rsi_period": 14, "rsi_oversold": 20, "rsi_overbought": 80,
-            "bb_period":  20, "bb_std": 2.5,
-        },
-    },
-    "EURCAD": {
-        "low_vol":  "disabled",#"bollinger",
-        "high_vol": "rsi",
-        "params": {            
-            "bb_period":  10, "bb_std": 2.0,
-            "rsi_period": 21, "rsi_oversold": 30, "rsi_overbought": 70,
-        },
-    },
-    "GBPCAD": {
-        "low_vol":  "bollinger",
-        "high_vol": "disabled",#"rsi",
-        "params": {
-            "bb_period":  50, "bb_std": 2.0,
-            "rsi_period": 14, "rsi_oversold": 20, "rsi_overbought": 80,
-        },
-    },
-    "AUDUSD": {
-        "low_vol":  "disabled",#"bollinger",
-        "high_vol": "disabled",#"ema_flipped",
-        "params": {
-            "bb_period": 20, "bb_std": 2.5,
-            "ema_fast":  20, "ema_slow": 100,
-        },
-    },
-    "USDCAD": {
-        "low_vol":  "disabled",#"ema_flipped",
+        "low_vol":  "ema_flipped",  # EMA_flip_10_50 — Sharpe 1.63, DD -14.9%
         "high_vol": "disabled",
-        "params": {
-            "bb_period": 20, "bb_std": 3.0,
-            "ema_fast":  10, "ema_slow": 200,
-        },
     },
-    "XAUUSD": {
+    "USDJPY": {
         "low_vol":  "disabled",
         "high_vol": "disabled",
-        "params": {
-            "ema_fast": 10, "ema_slow": 200,
-        },
     },
+}
+
+# ─────────────────────────────────────────────
+# PARAMS
+# ─────────────────────────────────────────────
+
+PARAMS = {
+    "bb_period":          20,
+    "bb_std":             3.0,
+    "ema_fast":           10,
+    "ema_slow":           50,
+    "rsi_period":         21,
+    "rsi_oversold":       20,
+    "rsi_overbought":     80,
+    "atr_channel_period": 20,
+    "atr_break_mult":     0.5,
+    "vwap_threshold":     0.002,
 }
 
 
@@ -111,18 +75,22 @@ SYMBOL_CONFIG = {
 CONFIG = {
     "terminal_path": r"C:\Program Files\MetaTrader 5\terminal64.exe",
     "terminal_path_2": r"C:\Program Files\EGM Securities MetaTrader 5 Terminal\terminal64.exe",
-    "timeframe":     mt5.TIMEFRAME_H1,
-    "n_bars":        175000,
+    "symbols":       ["EURUSD", "GBPUSD", "USDJPY"],
+    "timeframe":     mt5.TIMEFRAME_M15,
+    "n_bars":        170000,
 
-    "train_bars": 2000,
-    "test_bars":  200,
-    "step_bars":  200,
-    "n_states":   2,
-    "n_iter":     50,
+    "train_bars": 400,
+    "test_bars":  80,
+    "step_bars":  80,
 
+    "n_states": 2,
+    "n_iter":   200,
     "hmm_features": [
-        "realized_vol", "atr_pct", "vol_ratio",
-        "bar_range",    "volume_zscore",
+        "realized_vol",
+        "atr_pct",
+        "vol_ratio",
+        "bar_range",
+        "volume_zscore",
     ],
 
     "min_confidence":  0.65,
@@ -132,22 +100,19 @@ CONFIG = {
     "base_risk_pct":    0.01,
     "sl_atr_mult":      1.5,
     "min_rr":           1.5,
-    "max_spread_to_sl_pct": 10,
 
     "pip_size": {
-        "EURUSD": 0.0001, "GBPUSD": 0.0001,
-        "EURGBP": 0.0001, "EURCAD": 0.0001,
-        "GBPCAD": 0.0001, "AUDUSD": 0.0001,
-        "USDCAD": 0.0001, "XAUUSD": 0.1,
+        "EURUSD": 0.0001,
+        "GBPUSD": 0.0001,
+        "USDJPY": 0.01,
     },
     "pip_value_per_lot": {
-        "EURUSD": 10.0,  "GBPUSD": 10.0,
-        "EURGBP": 12.5,  "EURCAD": 7.5,
-        "GBPCAD": 7.5,   "AUDUSD": 10.0,
-        "USDCAD": 7.5,   "XAUUSD": 10.0,
+        "EURUSD": 10.0,
+        "GBPUSD": 10.0,
+        "USDJPY": 9.0,
     },
 
-    "results_dir": "backtest_results/validation_v533_updt/",
+    "results_dir": "backtest_results/validation/",
 }
 
 
@@ -157,7 +122,7 @@ CONFIG = {
 
 def fetch_history(symbol: str) -> pd.DataFrame | None:
     if not mt5.symbol_select(symbol, True):
-        print(f"  [WARN] Cannot select {symbol}")
+        print(f"[WARN] Cannot select {symbol}")
         return None
 
     rates = mt5.copy_rates_from_pos(
@@ -165,16 +130,14 @@ def fetch_history(symbol: str) -> pd.DataFrame | None:
     )
     if rates is None or len(rates) == 0:
         return None
-    
 
     df = pd.DataFrame(rates)
     df["time"] = pd.to_datetime(df["time"], unit="s")
-    print(f"copied rates:{len(rates)} instead of {CONFIG['n_bars']} on {symbol} from {df['time'].iloc[0]}")
     df.set_index("time", inplace=True)
     df.drop(columns=["real_volume"], errors="ignore", inplace=True)
     df.rename(columns={"tick_volume": "volume"}, inplace=True)
 
-    print(f"  {symbol}: {len(df):,} bars | "
+    print(f"  {symbol}: {len(df)} bars | "
           f"{df.index[0].date()} to {df.index[-1].date()}")
     return df
 
@@ -183,7 +146,7 @@ def fetch_history(symbol: str) -> pd.DataFrame | None:
 # FEATURE ENGINEERING
 # ─────────────────────────────────────────────
 
-def engineer_features(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     feat = df.copy()
 
     feat["log_return"]   = np.log(feat["close"] / feat["close"].shift(1))
@@ -205,41 +168,31 @@ def engineer_features(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     vs = feat["volume"].rolling(20).std().replace(0, np.nan)
     feat["volume_zscore"] = (feat["volume"] - vm) / vs
 
-    # EMA
-    fast = params.get("ema_fast", 10)
-    slow = params.get("ema_slow", 50)
-    feat["ema_fast"] = feat["close"].ewm(span=fast, adjust=False).mean()
-    feat["ema_slow"] = feat["close"].ewm(span=slow, adjust=False).mean()
+    feat["ema_fast"] = feat["close"].ewm(span=PARAMS["ema_fast"], adjust=False).mean()
+    feat["ema_slow"] = feat["close"].ewm(span=PARAMS["ema_slow"], adjust=False).mean()
 
-    # Bollinger Bands
-    bb_p             = params.get("bb_period", 20)
-    bb_s             = params.get("bb_std", 2.0)
-    bb_mid           = feat["close"].rolling(bb_p).mean()
-    bb_std           = feat["close"].rolling(bb_p).std()
-    feat["bb_upper"] = bb_mid + bb_s * bb_std
-    feat["bb_lower"] = bb_mid - bb_s * bb_std
+    bb_mid           = feat["close"].rolling(PARAMS["bb_period"]).mean()
+    bb_std           = feat["close"].rolling(PARAMS["bb_period"]).std()
+    feat["bb_upper"] = bb_mid + PARAMS["bb_std"] * bb_std
+    feat["bb_lower"] = bb_mid - PARAMS["bb_std"] * bb_std
+    feat["bb_mid"]   = bb_mid
 
-    # RSI
-    rsi_p  = params.get("rsi_period", 14)
-    delta  = feat["close"].diff()
-    gain   = delta.clip(lower=0).rolling(rsi_p).mean()
-    loss   = (-delta.clip(upper=0)).rolling(rsi_p).mean()
-    rs     = gain / loss.replace(0, np.nan)
-    feat["rsi"] = 100 - (100 / (1 + rs))
-    
-    # ATR channel
-    atr_cp               = params.get("atr_channel_period", 20)
-    feat["highest_high"] = feat["high"].rolling(atr_cp).max()
-    feat["lowest_low"]   = feat["low"].rolling(atr_cp).min()
-    
-    # VWAP
+    delta          = feat["close"].diff()
+    gain           = delta.clip(lower=0).rolling(PARAMS["rsi_period"]).mean()
+    loss           = (-delta.clip(upper=0)).rolling(PARAMS["rsi_period"]).mean()
+    rs             = gain / loss.replace(0, np.nan)
+    feat["rsi"]    = 100 - (100 / (1 + rs))
+
+    cp = PARAMS["atr_channel_period"]
+    feat["highest_high"] = feat["high"].rolling(cp).max()
+    feat["lowest_low"]   = feat["low"].rolling(cp).min()
+
     feat["typical_price"] = (feat["high"] + feat["low"] + feat["close"]) / 3
     feat["tp_volume"]     = feat["typical_price"] * feat["volume"]
     feat["date"]          = feat.index.date
     feat["cum_tp_vol"]    = feat.groupby("date")["tp_volume"].cumsum()
     feat["cum_vol"]       = feat.groupby("date")["volume"].cumsum()
-    feat["vwap"]          = (feat["cum_tp_vol"] /
-                             feat["cum_vol"].replace(0, np.nan))
+    feat["vwap"]          = feat["cum_tp_vol"] / feat["cum_vol"].replace(0, np.nan)
     feat.drop(columns=["date", "cum_tp_vol", "cum_vol",
                         "typical_price", "tp_volume"], inplace=True)
 
@@ -273,17 +226,14 @@ def fit_hmm(train_df: pd.DataFrame):
         return None, None, None
 
     vol_idx       = features.index("realized_vol")
-    state_vols    = {s: model.means_[s][vol_idx]
-                     for s in range(CONFIG["n_states"])}
+    state_vols    = {s: model.means_[s][vol_idx] for s in range(CONFIG["n_states"])}
     sorted_states = sorted(state_vols, key=state_vols.get)
-    regime_map    = {sorted_states[0]: "low_vol",
-                     sorted_states[1]: "high_vol"}
+    regime_map    = {sorted_states[0]: "low_vol", sorted_states[1]: "high_vol"}
 
     return model, scaler, regime_map
 
 
-def classify_window(model, scaler, regime_map,
-                    test_df: pd.DataFrame) -> pd.DataFrame:
+def classify_window(model, scaler, regime_map, test_df: pd.DataFrame) -> pd.DataFrame:
     features    = CONFIG["hmm_features"]
     X           = scaler.transform(test_df[features].values)
     state_seq   = model.predict(X)
@@ -309,8 +259,7 @@ def signal_bollinger(row: pd.Series) -> tuple:
     return "flat", "bollinger"
 
 
-def signal_ema(row: pd.Series, prev_row: pd.Series,
-               flipped: bool = False) -> tuple:
+def signal_ema(row: pd.Series, prev_row: pd.Series, flipped: bool = False) -> tuple:
     bullish = (prev_row["ema_fast"] <= prev_row["ema_slow"] and
                row["ema_fast"]      >  row["ema_slow"])
     bearish = (prev_row["ema_fast"] >= prev_row["ema_slow"] and
@@ -323,21 +272,31 @@ def signal_ema(row: pd.Series, prev_row: pd.Series,
     return "flat", name
 
 
-def signal_rsi(row: pd.Series, params: dict) -> tuple:
-    rsi        = row["rsi"]
-    oversold   = params.get("rsi_oversold", 20)
-    overbought = params.get("rsi_overbought", 80)
-    if rsi < oversold:
+def signal_rsi(row: pd.Series) -> tuple:
+    rsi = row["rsi"]
+    if rsi < PARAMS["rsi_oversold"]:
         return "buy",  "rsi"
-    elif rsi > overbought:
+    elif rsi > PARAMS["rsi_overbought"]:
         return "sell", "rsi"
     return "flat", "rsi"
 
 
-def signal_vwap(row: pd.Series, params: dict) -> tuple:
+def signal_atr_breakout(row: pd.Series) -> tuple:
+    price    = row["close"]
+    mult     = PARAMS["atr_break_mult"]
+    upper_ch = row["highest_high"] + mult * row["atr"]
+    lower_ch = row["lowest_low"]   - mult * row["atr"]
+    if price > upper_ch:
+        return "buy",  "atr_breakout"
+    elif price < lower_ch:
+        return "sell", "atr_breakout"
+    return "flat", "atr_breakout"
+
+
+def signal_vwap(row: pd.Series) -> tuple:
     price     = row["close"]
     vwap      = row.get("vwap", 0)
-    threshold = params.get("vwap_threshold", 0.002)
+    threshold = PARAMS["vwap_threshold"]
     if vwap == 0 or np.isnan(vwap):
         return "flat", "vwap"
     deviation = (price - vwap) / vwap
@@ -347,20 +306,19 @@ def signal_vwap(row: pd.Series, params: dict) -> tuple:
         return "sell", "vwap"
     return "flat", "vwap"
 
-def get_signal(row: pd.Series, prev_row: pd.Series,
-               symbol: str) -> tuple:
+
+def get_signal(row: pd.Series, prev_row: pd.Series, symbol: str) -> tuple:
     regime      = row["regime"]
     confidence  = row["confidence"]
     switch_prob = row["switch_prob"]
 
     if confidence  < CONFIG["min_confidence"]:
-        return "flat", "filtered"
+        return "flat", "filtered_confidence"
     if switch_prob > CONFIG["max_switch_prob"]:
-        return "flat", "filtered"
+        return "flat", "filtered_switch"
 
-    sym_cfg       = SYMBOL_CONFIG.get(symbol, {})
+    sym_cfg       = STRATEGY_CONFIG.get(symbol, {})
     strategy_type = sym_cfg.get(regime, "disabled")
-    params        = sym_cfg.get("params", {})
 
     if strategy_type == "disabled":
         return "flat", "disabled"
@@ -371,76 +329,39 @@ def get_signal(row: pd.Series, prev_row: pd.Series,
     elif strategy_type == "ema_flipped":
         return signal_ema(row, prev_row, flipped=True)
     elif strategy_type == "rsi":
-        return signal_rsi(row, params)
+        return signal_rsi(row)
+    elif strategy_type == "atr_breakout":
+        return signal_atr_breakout(row)
     elif strategy_type == "vwap":
-        return signal_vwap(row, params)
+        return signal_vwap(row)
+
     return "flat", "unknown"
 
 
 # ─────────────────────────────────────────────
-# TRADE SIMULATION — vectorised
+# TRADE SIMULATION
 # ─────────────────────────────────────────────
 
 def simulate_trade(entry_bar: pd.Series, subsequent_bars: pd.DataFrame,
                    direction: str, strategy: str, regime: str,
-                   symbol: str, balance: float,
-                   confidence: float) -> dict:
-    pip_size  = CONFIG["pip_size"].get(symbol, 0.0001)    
+                   symbol: str, balance: float, confidence: float) -> dict:
+    pip_size  = CONFIG["pip_size"].get(symbol, 0.0001)
     pip_value = CONFIG["pip_value_per_lot"].get(symbol, 10.0)
 
     atr_pips = entry_bar["atr"] / pip_size
     sl_pips  = max(round(atr_pips * CONFIG["sl_atr_mult"], 1), 5.0)
-    spread_pips = entry_bar["spread"]/10
-    if(spread_pips>sl_pips*(CONFIG["max_spread_to_sl_pct"]/100)):        
-        #print(f"{symbol} {entry_bar.name} SKIPPING spread is {spread_pips} VS min required {sl_pips*(CONFIG["max_spread_to_sl_pct"]/100)}")
-        return None
-    
-    spread_val = spread_pips*CONFIG["pip_size"].get(symbol,0.0001)
 
-    trend_strategies = {"ema", "ema_flipped"}
+    trend_strategies = {"ema", "ema_flipped", "atr_breakout"}
     tp_mult = 2.0 if strategy in trend_strategies else 1.0
-    tp_pips = max(round(atr_pips * tp_mult, 1),
-                  sl_pips * CONFIG["min_rr"], 5.0)
+    tp_pips = max(round(atr_pips * tp_mult, 1), sl_pips * CONFIG["min_rr"], 5.0)
 
     entry_price = entry_bar["close"]
     if direction == "buy":
-        entry_price = entry_bar["close"] + spread_val
         sl_price = entry_price - sl_pips * pip_size
         tp_price = entry_price + tp_pips * pip_size
     else:
         sl_price = entry_price + sl_pips * pip_size
         tp_price = entry_price - tp_pips * pip_size
-
-    highs = subsequent_bars["high"].values
-    lows  = subsequent_bars["low"].values
-
-    if direction == "buy":
-        sl_hit = lows  <= sl_price
-        tp_hit = highs >= tp_price
-    else:
-        sl_hit = highs+spread_val >= sl_price
-        tp_hit = lows+spread_val  <= tp_price
-
-    sl_idx = int(np.argmax(sl_hit)) if sl_hit.any() else len(subsequent_bars)
-    tp_idx = int(np.argmax(tp_hit)) if tp_hit.any() else len(subsequent_bars)
-
-    if sl_hit.any() and sl_idx <= tp_idx:
-        outcome    = "sl"
-        exit_price = sl_price
-    elif tp_hit.any() and tp_idx < sl_idx:
-        outcome    = "tp"
-        exit_price = tp_price
-    else:
-        outcome    = "timeout"
-        exit_price = subsequent_bars["close"].iloc[-1]
-        if direction == "buy" and exit_price > entry_price:
-            tp_pips = (exit_price - entry_price)/pip_size
-        elif direction == "buy" and exit_price < entry_price:
-            sl_pips = abs(exit_price - entry_price)/pip_size
-        elif direction == "sell" and exit_price > entry_price:
-            sl_pips = abs(exit_price - entry_price)/pip_size
-        elif direction == "sell" and exit_price < entry_price:
-            tp_pips = (exit_price - entry_price)/pip_size
 
     min_conf    = CONFIG["min_confidence"]
     conf_scalar = max(0.5, min(1.0,
@@ -449,22 +370,50 @@ def simulate_trade(entry_bar: pd.Series, subsequent_bars: pd.DataFrame,
     risk_amount = balance * CONFIG["base_risk_pct"] * conf_scalar
     lot_size    = max(round(risk_amount / (sl_pips * pip_value), 2), 0.01)
 
+    outcome    = "timeout"
+    exit_price = subsequent_bars["close"].iloc[-1]
+
+    for _, bar in subsequent_bars.iterrows():
+        if direction == "buy":
+            if bar["low"] <= sl_price:
+                outcome    = "sl"
+                exit_price = sl_price
+                break
+            if bar["high"] >= tp_price:
+                outcome    = "tp"
+                exit_price = tp_price
+                break
+        else:
+            if bar["high"] >= sl_price:
+                outcome    = "sl"
+                exit_price = sl_price
+                break
+            if bar["low"] <= tp_price:
+                outcome    = "tp"
+                exit_price = tp_price
+                break
+
     pnl_pips = ((exit_price - entry_price) / pip_size if direction == "buy"
                 else (entry_price - exit_price) / pip_size)
     pnl_usd  = round(pnl_pips * pip_value * lot_size, 2)
 
     return {
-        "direction":  direction,  "regime":  regime,
-        "strategy":   strategy,   "confidence": round(confidence, 4),
-        "sl_pips":    sl_pips,    "tp_pips": tp_pips,
-        "lot_size":   lot_size,   "outcome": outcome,
+        "direction":  direction,
+        "regime":     regime,
+        "strategy":   strategy,
+        "confidence": round(confidence, 4),
+        "sl_pips":    sl_pips,
+        "tp_pips":    tp_pips,
+        "lot_size":   lot_size,
+        "outcome":    outcome,
         "pnl_pips":   round(pnl_pips, 2),
-        "pnl_usd":    pnl_usd,   "won": pnl_usd > 0,
+        "pnl_usd":    pnl_usd,
+        "won":        pnl_usd > 0,
     }
 
 
 # ─────────────────────────────────────────────
-# WALK-FORWARD
+# WALK-FORWARD ENGINE
 # ─────────────────────────────────────────────
 
 def walk_forward(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
@@ -476,10 +425,12 @@ def walk_forward(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     balance = CONFIG["starting_balance"]
     n       = len(df)
     start   = train_bars
+    windows = 0
 
     while start + test_bars <= n:
-        train_df = df.iloc[start - train_bars : start]
-        test_df  = df.iloc[start : start + test_bars]
+        windows += 1
+        train_df   = df.iloc[start - train_bars : start]
+        test_df    = df.iloc[start : start + test_bars]
 
         model, scaler, regime_map = fit_hmm(train_df)
         if model is None:
@@ -493,6 +444,7 @@ def walk_forward(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
             prev_row = classified.iloc[i - 1]
 
             direction, strategy = get_signal(row, prev_row, symbol)
+
             if direction == "flat":
                 continue
 
@@ -511,11 +463,9 @@ def walk_forward(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
                 confidence      = float(row["confidence"]),
             )
 
-            if(result==None):
-                continue# trade was skipped due to high spread to al ratio
-
             result["symbol"]         = symbol
             result["entry_time"]     = classified.index[i]
+            result["window"]         = windows
             result["balance_before"] = balance
             balance                 += result["pnl_usd"]
             result["balance_after"]  = balance
@@ -523,6 +473,7 @@ def walk_forward(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
 
         start += step_bars
 
+    print(f"  {symbol}: {windows} windows | {len(trades)} trades simulated")
     return pd.DataFrame(trades)
 
 
@@ -532,7 +483,7 @@ def walk_forward(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
 
 def compute_metrics(trades: pd.DataFrame, symbol: str) -> dict:
     if trades.empty:
-        return {"symbol": symbol, "error": "No trades"}
+        return {"symbol": symbol, "error": "No trades generated"}
 
     total   = len(trades)
     winning = trades[trades["won"] == True]
@@ -555,15 +506,6 @@ def compute_metrics(trades: pd.DataFrame, symbol: str) -> dict:
                   if returns.std() > 0 else 0)
     expectancy = total_pnl / total
 
-    strategy_stats = {}
-    for strat in trades["strategy"].dropna().unique():
-        s = trades[trades["strategy"] == strat]
-        strategy_stats[strat] = {
-            "trades":   len(s),
-            "win_rate": round(len(s[s["won"]]) / len(s), 3),
-            "pnl":      round(s["pnl_usd"].sum(), 2),
-        }
-
     regime_stats = {}
     for regime in ["low_vol", "high_vol"]:
         r = trades[trades["regime"] == regime]
@@ -573,6 +515,15 @@ def compute_metrics(trades: pd.DataFrame, symbol: str) -> dict:
                 "win_rate": round(len(r[r["won"]]) / len(r), 3),
                 "pnl":      round(r["pnl_usd"].sum(), 2),
             }
+
+    strategy_stats = {}
+    for strat in trades["strategy"].dropna().unique():
+        s = trades[trades["strategy"] == strat]
+        strategy_stats[strat] = {
+            "trades":   len(s),
+            "win_rate": round(len(s[s["won"]]) / len(s), 3),
+            "pnl":      round(s["pnl_usd"].sum(), 2),
+        }
 
     return {
         "symbol":         symbol,
@@ -586,10 +537,10 @@ def compute_metrics(trades: pd.DataFrame, symbol: str) -> dict:
         "sharpe":         round(sharpe, 3),
         "final_balance":  round(equity[-1], 2),
         "expectancy":     round(expectancy, 2),
-        "strategy_stats": strategy_stats,
         "regime_stats":   regime_stats,
-        "_equity":        equity,
-        "_trades":        trades,
+        "strategy_stats": strategy_stats,
+        "_equity":        equity,           # stored for plotting, not saved to CSV
+        "_trades":        trades,           # stored for plotting
     }
 
 
@@ -603,155 +554,29 @@ def print_report(metrics: dict):
     print(f"{'='*60}")
 
     if "error" in metrics:
-        print(f"  {metrics['error']}")
+        print(f"  ERROR: {metrics['error']}")
         return
 
-    sym_cfg = SYMBOL_CONFIG.get(metrics["symbol"], {})
-    active  = []
-    if sym_cfg.get("low_vol",  "disabled") != "disabled":
-        active.append(f"low_vol={sym_cfg['low_vol']}")
-    if sym_cfg.get("high_vol", "disabled") != "disabled":
-        active.append(f"high_vol={sym_cfg['high_vol']}")
-
-    print(f"  Strategy       : {' | '.join(active)}")
-    print(f"  Params         : {sym_cfg.get('params', {})}")
-    print(f"  Total trades   : {metrics['total_trades']:,}")
-    print(f"  Win rate       : {metrics['win_rate']:.1%}")
-    print(f"  Total P&L      : ${metrics['total_pnl']:,.2f}")
-    print(f"  Profit factor  : {metrics['profit_factor']:.2f}")
-    print(f"  Avg win        : ${metrics['avg_win']:.2f}")
-    print(f"  Avg loss       : ${metrics['avg_loss']:.2f}")
-    print(f"  Max drawdown   : {metrics['max_drawdown']:.1%}")
-    print(f"  Sharpe ratio   : {metrics['sharpe']:.2f}")
-    print(f"  Expectancy     : ${metrics['expectancy']:.2f} per trade")
-    print(f"  Final balance  : ${metrics['final_balance']:,.2f}")
+    print(f"  Total trades    : {metrics['total_trades']}")
+    print(f"  Win rate        : {metrics['win_rate']:.1%}")
+    print(f"  Total P&L       : ${metrics['total_pnl']:,.2f}")
+    print(f"  Profit factor   : {metrics['profit_factor']:.2f}")
+    print(f"  Avg win         : ${metrics['avg_win']:.2f}")
+    print(f"  Avg loss        : ${metrics['avg_loss']:.2f}")
+    print(f"  Max drawdown    : {metrics['max_drawdown']:.1%}")
+    print(f"  Sharpe ratio    : {metrics['sharpe']:.2f}")
+    print(f"  Expectancy      : ${metrics['expectancy']:.2f} per trade")
+    print(f"  Final balance   : ${metrics['final_balance']:,.2f}")
 
     print(f"\n  -- By Regime --")
-    for regime, s in metrics.get("regime_stats", {}).items():
+    for regime, s in metrics["regime_stats"].items():
         print(f"  {regime:12} | trades={s['trades']:4} | "
               f"win={s['win_rate']:.0%} | pnl=${s['pnl']:,.2f}")
 
     print(f"\n  -- By Strategy --")
-    for strat, s in metrics.get("strategy_stats", {}).items():
+    for strat, s in metrics["strategy_stats"].items():
         print(f"  {strat:22} | trades={s['trades']:4} | "
               f"win={s['win_rate']:.0%} | pnl=${s['pnl']:,.2f}")
-
-
-# ─────────────────────────────────────────────
-# EQUITY CURVE PLOT
-# ─────────────────────────────────────────────
-
-def plot_equity_curve(metrics: dict, symbol: str):
-    try:
-        import matplotlib.pyplot as plt
-        import matplotlib.patches as mpatches
-    except ImportError:
-        print("  [PLOT] pip install matplotlib to enable charts")
-        return
-
-    trades = metrics.get("_trades")
-    equity = metrics.get("_equity")
-    if trades is None or equity is None or len(equity) == 0:
-        return
-
-    colour_low  = "#1D9E75"
-    colour_high = "#D85A30"
-
-    fig, (ax1, ax2, ax3) = plt.subplots(
-        3, 1, figsize=(14, 10),
-        gridspec_kw={"height_ratios": [4, 1.5, 1.5]},
-        sharex=True
-    )
-
-    sym_cfg = SYMBOL_CONFIG.get(symbol, {})
-    active  = []
-    if sym_cfg.get("low_vol",  "disabled") != "disabled":
-        active.append(f"low={sym_cfg['low_vol']}")
-    if sym_cfg.get("high_vol", "disabled") != "disabled":
-        active.append(f"high={sym_cfg['high_vol']}")
-
-    fig.suptitle(
-        f"Walk-Forward Validation — {symbol}  "
-        f"({' | '.join(active)})  "
-        f"Sharpe {metrics['sharpe']:.2f} | "
-        f"DD {metrics['max_drawdown']:.1%} | "
-        f"PF {metrics['profit_factor']:.2f}",
-        fontsize=12
-    )
-
-    # Equity curve
-    for i in range(len(trades) - 1):
-        colour = (colour_low
-                  if trades.iloc[i]["regime"] == "low_vol"
-                  else colour_high)
-        ax1.plot([i, i+1], [equity[i], equity[i+1]],
-                 color=colour, linewidth=1.2)
-
-    ax1.axhline(CONFIG["starting_balance"], color="gray",
-                linestyle="--", linewidth=0.8, alpha=0.6)
-    peak_val = equity.max()
-    peak_idx = equity.argmax()
-    ax1.annotate(
-        f"Peak ${peak_val:,.0f}",
-        xy=(peak_idx, peak_val),
-        xytext=(peak_idx + len(trades) * 0.03, peak_val),
-        fontsize=8, color="gray",
-        arrowprops=dict(arrowstyle="-", color="gray", lw=0.5)
-    )
-    ax1.set_ylabel("Account Balance ($)")
-    ax1.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda x, _: f"${x:,.0f}")
-    )
-    ax1.grid(True, alpha=0.25, linestyle=":")
-    low_p  = mpatches.Patch(color=colour_low,  label="low_vol")
-    high_p = mpatches.Patch(color=colour_high, label="high_vol")
-    ax1.legend(handles=[low_p, high_p], loc="upper left", fontsize=9)
-
-    # Drawdown
-    peak_series = np.maximum.accumulate(equity)
-    dd_series   = (equity - peak_series) / peak_series * 100
-    ax2.fill_between(range(len(dd_series)), dd_series, 0,
-                     color=colour_high, alpha=0.4)
-    ax2.plot(dd_series, color=colour_high, linewidth=0.8)
-    ax2.axhline(0, color="gray", linewidth=0.5)
-    ax2.set_ylabel("Drawdown (%)")
-    ax2.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda x, _: f"{x:.0f}%")
-    )
-    max_dd_idx = dd_series.argmin()
-    ax2.annotate(
-        f"Max DD {dd_series.min():.1f}%",
-        xy=(max_dd_idx, dd_series.min()),
-        xytext=(max_dd_idx + len(trades) * 0.03, dd_series.min() * 0.6),
-        fontsize=8, color=colour_high,
-        arrowprops=dict(arrowstyle="-", color=colour_high, lw=0.5)
-    )
-    ax2.grid(True, alpha=0.25, linestyle=":")
-
-    # Rolling win rate
-    roll_wr = trades["won"].astype(int).rolling(20).mean() * 100
-    ax3.plot(roll_wr.values, color="#378ADD", linewidth=1.2)
-    ax3.axhline(50, color="gray", linestyle="--", linewidth=0.8)
-    ax3.fill_between(range(len(roll_wr)), roll_wr.values, 50,
-                     where=(roll_wr.values >= 50),
-                     color=colour_low, alpha=0.25)
-    ax3.fill_between(range(len(roll_wr)), roll_wr.values, 50,
-                     where=(roll_wr.values < 50),
-                     color=colour_high, alpha=0.25)
-    ax3.set_ylabel("Win Rate %\n(rolling 20)")
-    ax3.set_xlabel("Trade Number")
-    ax3.set_ylim(0, 100)
-    ax3.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda x, _: f"{x:.0f}%")
-    )
-    ax3.grid(True, alpha=0.25, linestyle=":")
-
-    plt.tight_layout()
-    os.makedirs(CONFIG["results_dir"], exist_ok=True)
-    chart_path = os.path.join(CONFIG["results_dir"], f"{symbol}_equity.png")
-    plt.savefig(chart_path, dpi=150, bbox_inches="tight")
-    print(f"  Chart saved -> {chart_path}")
-    plt.show()
 
 
 # ─────────────────────────────────────────────
@@ -760,10 +585,13 @@ def plot_equity_curve(metrics: dict, symbol: str):
 
 def save_results(trades: pd.DataFrame, metrics: dict, symbol: str):
     os.makedirs(CONFIG["results_dir"], exist_ok=True)
+
     trades.to_csv(
         os.path.join(CONFIG["results_dir"], f"{symbol}_trades.csv"),
         index=False
     )
+
+    # Exclude private keys (_equity, _trades) from CSV
     flat = {k: v for k, v in metrics.items()
             if not isinstance(v, dict) and not k.startswith("_")}
     pd.DataFrame([flat]).to_csv(
@@ -774,36 +602,183 @@ def save_results(trades: pd.DataFrame, metrics: dict, symbol: str):
 
 
 # ─────────────────────────────────────────────
+# EQUITY CURVE PLOT
+# ─────────────────────────────────────────────
+
+def plot_equity_curve(metrics: dict, symbol: str):
+    """
+    Plot equity curve with regime colouring + rolling win rate.
+    Green segments = low_vol regime trades.
+    Orange/red segments = high_vol regime trades.
+    Saves PNG to results_dir and shows interactive window.
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+        import matplotlib.lines as mlines
+    except ImportError:
+        print("  [PLOT] matplotlib not installed — run: pip install matplotlib")
+        return
+
+    trades = metrics.get("_trades")
+    equity = metrics.get("_equity")
+
+    if trades is None or equity is None or len(equity) == 0:
+        print("  [PLOT] No data to plot")
+        return
+
+    # ── Colour palette ────────────────────────
+    colour_low  = "#1D9E75"   # teal  — low_vol regime
+    colour_high = "#D85A30"   # coral — high_vol regime
+    colour_line = "#378ADD"   # blue  — rolling win rate
+
+    fig, (ax1, ax2, ax3) = plt.subplots(
+        3, 1, figsize=(14, 10),
+        gridspec_kw={"height_ratios": [4, 1.5, 1.5]},
+        sharex=True
+    )
+    fig.suptitle(
+        f"Walk-Forward Validation — {symbol}   "
+        f"(Sharpe {metrics['sharpe']:.2f} | "
+        f"DD {metrics['max_drawdown']:.1%} | "
+        f"PF {metrics['profit_factor']:.2f})",
+        fontsize=13, fontweight="normal"
+    )
+
+    # ── Panel 1: Equity curve ─────────────────
+    for i in range(len(trades) - 1):
+        colour = colour_low if trades.iloc[i]["regime"] == "low_vol" else colour_high
+        ax1.plot(
+            [i, i + 1],
+            [equity[i], equity[i + 1]],
+            color=colour, linewidth=1.2, solid_capstyle="round"
+        )
+
+    # Starting balance reference line
+    ax1.axhline(
+        CONFIG["starting_balance"], color="gray",
+        linestyle="--", linewidth=0.8, alpha=0.6, label="Starting balance"
+    )
+
+    # Peak equity reference
+    peak_val = equity.max()
+    peak_idx = equity.argmax()
+    ax1.annotate(
+        f"Peak ${peak_val:,.0f}",
+        xy=(peak_idx, peak_val),
+        xytext=(peak_idx + len(trades) * 0.02, peak_val),
+        fontsize=8, color="gray",
+        arrowprops=dict(arrowstyle="-", color="gray", lw=0.5)
+    )
+
+    ax1.set_ylabel("Account Balance ($)", fontsize=10)
+    ax1.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, _: f"${x:,.0f}")
+    )
+    ax1.grid(True, alpha=0.25, linestyle=":")
+
+    low_patch  = mpatches.Patch(color=colour_low,  label="low_vol regime")
+    high_patch = mpatches.Patch(color=colour_high, label="high_vol regime")
+    ax1.legend(handles=[low_patch, high_patch], loc="upper left", fontsize=9)
+
+    # ── Panel 2: Drawdown ─────────────────────
+    peak_series = np.maximum.accumulate(equity)
+    dd_series   = (equity - peak_series) / peak_series * 100   # in %
+
+    ax2.fill_between(
+        range(len(dd_series)), dd_series, 0,
+        color=colour_high, alpha=0.4, linewidth=0
+    )
+    ax2.plot(dd_series, color=colour_high, linewidth=0.8)
+    ax2.axhline(0, color="gray", linewidth=0.5)
+    ax2.set_ylabel("Drawdown (%)", fontsize=10)
+    ax2.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, _: f"{x:.0f}%")
+    )
+    ax2.grid(True, alpha=0.25, linestyle=":")
+
+    # Annotate max drawdown
+    max_dd_idx = dd_series.argmin()
+    ax2.annotate(
+        f"Max DD {dd_series.min():.1f}%",
+        xy=(max_dd_idx, dd_series.min()),
+        xytext=(max_dd_idx + len(trades) * 0.02, dd_series.min() * 0.7),
+        fontsize=8, color=colour_high,
+        arrowprops=dict(arrowstyle="-", color=colour_high, lw=0.5)
+    )
+
+    # ── Panel 3: Rolling win rate ─────────────
+    window    = 20
+    roll_wr   = trades["won"].astype(int).rolling(window).mean() * 100
+
+    ax3.plot(roll_wr.values, color=colour_line, linewidth=1.2)
+    ax3.axhline(50, color="gray", linestyle="--", linewidth=0.8, alpha=0.6)
+    ax3.fill_between(
+        range(len(roll_wr)),
+        roll_wr.values, 50,
+        where=(roll_wr.values >= 50),
+        color=colour_low, alpha=0.25, linewidth=0
+    )
+    ax3.fill_between(
+        range(len(roll_wr)),
+        roll_wr.values, 50,
+        where=(roll_wr.values < 50),
+        color=colour_high, alpha=0.25, linewidth=0
+    )
+    ax3.set_ylabel(f"Win Rate %\n(rolling {window})", fontsize=10)
+    ax3.set_xlabel("Trade Number", fontsize=10)
+    ax3.set_ylim(0, 100)
+    ax3.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, _: f"{x:.0f}%")
+    )
+    ax3.grid(True, alpha=0.25, linestyle=":")
+
+    plt.tight_layout()
+
+    os.makedirs(CONFIG["results_dir"], exist_ok=True)
+    chart_path = os.path.join(CONFIG["results_dir"], f"{symbol}_equity.png")
+    plt.savefig(chart_path, dpi=150, bbox_inches="tight")
+    print(f"  Chart saved -> {chart_path}")
+    plt.show()
+
+
+# ─────────────────────────────────────────────
+# PRINT ACTIVE CONFIG
+# ─────────────────────────────────────────────
+
+def print_active_config():
+    print("\n  Active strategy config:")
+    for symbol, regimes in STRATEGY_CONFIG.items():
+        for regime, strategy in regimes.items():
+            if strategy != "disabled":
+                print(f"    {symbol} {regime:8} -> {strategy}")
+
+    print("\n  Active parameters:")
+    for k, v in PARAMS.items():
+        print(f"    {k:22} : {v}")
+
+
+# ─────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────
 
 def run_validation():
     print("=" * 60)
-    print("  LAYER 5 — VALIDATION BACKTEST (v3)")
+    print("  LAYER 5 — VALIDATION BACKTEST")
     print("=" * 60)
-
-    print("\n  Per-symbol strategy:")
-    for sym, cfg in SYMBOL_CONFIG.items():
-        lv = cfg.get("low_vol",  "disabled")
-        hv = cfg.get("high_vol", "disabled")
-        p  = cfg.get("params", {})
-        active = []
-        if lv != "disabled": active.append(f"low_vol={lv}")
-        if hv != "disabled": active.append(f"high_vol={hv}")
-        print(f"    {sym:8} | "
-              f"{' | '.join(active) or 'disabled':45} | {p}")
+    print_active_config()
 
     if not mt5.initialize(path=CONFIG["terminal_path"]):
         print(f"\n[FATAL] MT5 init failed: {mt5.last_error()}")
         return
 
-    print(f"\nFetching {CONFIG['n_bars']:,} bars per symbol...")
-    all_metrics = []
-    start_time  = datetime.now()
+    print(f"\nFetching {CONFIG['n_bars']} bars of M15 history...")
 
-    for symbol, sym_cfg in SYMBOL_CONFIG.items():
-        if (sym_cfg.get("low_vol",  "disabled") == "disabled" and
-                sym_cfg.get("high_vol", "disabled") == "disabled"):
+    all_metrics = []
+
+    for symbol in CONFIG["symbols"]:
+        sym_cfg = STRATEGY_CONFIG.get(symbol, {})
+        if all(v == "disabled" for v in sym_cfg.values()):
             print(f"\n[{symbol}] All strategies disabled — skipping")
             continue
 
@@ -812,17 +787,15 @@ def run_validation():
         if raw is None:
             continue
 
-        params = sym_cfg.get("params", {})
-        df     = engineer_features(raw, params)
-        print(f"  Feature matrix: {len(df):,} bars")
+        df = engineer_features(raw)
+        print(f"  Feature matrix: {len(df)} bars x "
+              f"{len(CONFIG['hmm_features'])} features")
 
         if len(df) < CONFIG["train_bars"] + CONFIG["test_bars"]:
             print(f"  [SKIP] Not enough bars")
             continue
 
-        print(f"  Running walk-forward...", end="", flush=True)
         trades = walk_forward(df, symbol)
-        print(f" {len(trades):,} trades")
 
         if trades.empty:
             print(f"  [SKIP] No trades generated")
@@ -832,44 +805,25 @@ def run_validation():
         all_metrics.append(metrics)
         print_report(metrics)
         save_results(trades, metrics, symbol)
-        plot_equity_curve(metrics, symbol)
+        plot_equity_curve(metrics, symbol)   # show chart per symbol
 
     # Combined summary
-    valid = [m for m in all_metrics if "error" not in m]
-    if valid:
+    if len(all_metrics) >= 1:
         print(f"\n{'='*60}")
-        print("  COMBINED SUMMARY — ALL SYMBOLS")
+        print("  COMBINED SUMMARY")
         print(f"{'='*60}")
-        total_pnl    = sum(m["total_pnl"] for m in valid)
-        total_trades = sum(m["total_trades"] for m in valid)
-        avg_sharpe   = np.mean([m["sharpe"] for m in valid])
-        worst_dd     = min(m["max_drawdown"] for m in valid)
-        best_dd      = max(m["max_drawdown"] for m in valid)
-        total_time   = (datetime.now() - start_time).seconds
-
-        print(f"  Symbols traded  : {len(valid)}")
-        print(f"  Total trades    : {total_trades:,}")
+        total_pnl    = sum(m.get("total_pnl", 0) for m in all_metrics)
+        total_trades = sum(m.get("total_trades", 0) for m in all_metrics)
+        avg_sharpe   = np.mean([m.get("sharpe", 0) for m in all_metrics])
+        worst_dd     = min(m.get("max_drawdown", 0) for m in all_metrics)
+        print(f"  Symbols traded  : {len(all_metrics)}")
+        print(f"  Total trades    : {total_trades}")
         print(f"  Combined P&L    : ${total_pnl:,.2f}")
         print(f"  Avg Sharpe      : {avg_sharpe:.2f}")
         print(f"  Worst drawdown  : {worst_dd:.1%}")
-        print(f"  Best drawdown   : {best_dd:.1%}")
-        print(f"  Runtime         : {total_time//60}m {total_time%60:02d}s")
-
-        print(f"\n  {'Symbol':8} {'Trades':>7} {'Sharpe':>7} "
-              f"{'MaxDD':>7} {'PF':>5} {'P&L':>10}")
-        print(f"  {'-'*52}")
-        for m in sorted(valid, key=lambda x: x["sharpe"], reverse=True):
-            print(
-                f"  {m['symbol']:8} {m['total_trades']:>7,} "
-                f"{m['sharpe']:>7.2f} "
-                f"{m['max_drawdown']:>6.1%} "
-                f"{m['profit_factor']:>5.2f} "
-                f"${m['total_pnl']:>9,.0f}"
-            )
 
     mt5.shutdown()
     print("\n[DONE] Validation complete.")
-    print(f"       Results -> {CONFIG['results_dir']}")
 
 
 if __name__ == "__main__":
