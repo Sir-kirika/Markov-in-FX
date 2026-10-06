@@ -172,7 +172,7 @@ Following the v4 exhaustive results, Layer 3 and Layer 5 were updated to activat
 
 ---
 
-## Conclusion (October 2026)
+## Conclusion
 
 **The HMM regime layer carries some information, but it does not produce a tradeable edge.**
 
